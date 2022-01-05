@@ -1,5 +1,5 @@
 # gridintersect
-A small demo project to test concept proof grid acceleration structure
+A small demo project to PoC grid acceleration structure
 
 - Yellow is an occupied cell.
 - Light blue is traversed cell.
