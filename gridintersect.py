@@ -3,6 +3,7 @@ from diagrams import *
 import math
 from colorsys import hsv_to_rgb
 import sys
+
 FLOATMAX = sys.float_info.max
 
 class Grid:
@@ -90,8 +91,6 @@ class Grid:
         else:
             p = o + t0 * d
         
-        #ix = min(max(math.floor((p[0] - left) * xres / w), 0), xres-1)
-        #iy = min(max(math.floor((p[1] - bottom) * yres / h), 0), yres-1)
         ix, iy = self.getGridCellIndicesAt(*p)
 
         # =============== Grid Intersects
@@ -128,6 +127,7 @@ class Grid:
             iy_step = -1
             iy_stop = -1
 
+        # traversial as generator (cleaner for loops for multiple passes)
         def gridTravesial(ix, iy, tx_next, ty_next):
             while ix != ix_stop and iy != iy_stop:
                 yield (ix, iy, tx_next, ty_next)
@@ -138,31 +138,62 @@ class Grid:
                     iy += iy_step
                     ty_next += dty
 
+        cellStyles = []
+        overall_hits = []
         for index_x, index_y, my_tx_next, my_ty_next in gridTravesial(ix, iy, tx_next, ty_next):
-            hsvcolor = (Hue.AZURE, 0.1, 1)
             geometries = self.cells[index_x][index_y]
-            if len(geometries) > 0:
-                hsvcolor = (Hue.AZURE, 0.3, 1)
-                t_min = math.inf
-                for geometry in geometries:
-                    if hasattr(geometry, 'isMailboxed'):
-                        hsvcolor = (Hue.AZURE, 0.1, 1)
-                        continue
-                    hit_info = geometry.intersect(self.ct, o, d)
-                    # only count hits located in cur cell
-                    if type(hit_info) == tuple:
-                        hit_t, _ = hit_info
-                        if hit_t < my_tx_next and hit_t < my_ty_next and hit_t < t_min: 
-                            t_min = hit_t
-                            hsvcolor = (Hue.GREEN, 0.3, .9)
-                            self.markCell(index_x, index_y, hsvcolor)
-                    else:
-                        geometry.isMailboxed = True
-                if t_min < math.inf:
-                    point(self.ct, np.add(o, np.multiply(t_min, d)))
-                    break
-            self.markCell(index_x, index_y, hsvcolor)
 
+            mailbox_skip = 0
+            if len(geometries) > 0: # any geometry contained in cell?
+                hitsInCell = []
+                for geometry in geometries:
+                    if not hasattr(geometry, 'isMailboxed'): # is geometry mail boxed, skip intersection test
+                        hit_info = geometry.intersect(self.ct, o, d)
+                        if type(hit_info) == tuple: # we have valid hit?
+                            hit_t, _ = hit_info
+                            if hit_t < my_tx_next and hit_t < my_ty_next: # only count hits located in cur cell
+                                hitsInCell.append(hit_t)
+                                geometry.isMailboxed = True
+                            else:
+                                pass
+                        else:
+                            # missed geometry, no need to reintersect in future
+                            geometry.isMailboxed = True
+                    else:
+                        mailbox_skip += 1 # skipped because of mailbox
+
+                # some geoms where hit, get min for cell
+                if len(hitsInCell) > 0:
+                    t_min = min(hitsInCell)
+                    cellStyles.append( (index_x, index_y, 'hit') )
+                    overall_hits += hitsInCell
+                    #break;
+                elif mailbox_skip > 0:
+                    cellStyles.append( (index_x, index_y, 'mailskip') )
+                else:
+                    cellStyles.append( (index_x, index_y, 'tested') )
+            else:
+                # cell is empty
+                cellStyles.append( (index_x, index_y, 'traversed') )
+
+        for x_index, y_index, style in cellStyles:
+            if style == 'hit':
+                self.markCell(x_index, y_index,(Hue.GREEN, 0.3, .9) )
+            elif style == 'traversed':
+                self.markCell(x_index, y_index, (Hue.AZURE, 0.1, 1))
+            elif style == 'tested':
+                self.markCell(x_index, y_index, (Hue.AZURE, 0.3, 1))
+            elif style == 'mailskip':
+                self.markCell(x_index, y_index, (Hue.RED, 0.3, 1))
+
+        if len(overall_hits):
+            self.ct.save()
+            self.ct.set_source_rgb(0, 0, 0)
+            hitpoint = np.add(o, np.multiply(min(overall_hits), d))
+            point(self.ct, hitpoint)
+            self.ct.restore()
+
+        # intersections with grid cells
         for _, _, my_tx_next, my_ty_next in gridTravesial(ix, iy, tx_next, ty_next):
             ct = self.ct
             ct.save()
@@ -234,7 +265,7 @@ if __name__=='__main__':
             rayOrigin = (x, y)
         elif b == 3:
             if not (rayOrigin[0] == x and rayOrigin[1] == y):
-                rayDir = npa.normalize(np.subtract((x, y), rayOrigin))
+                rayDir = normalize(np.subtract((x, y), rayOrigin))
 
     def myscene(ct):
         # geometries
@@ -276,8 +307,6 @@ if __name__=='__main__':
         drawCoordinateFrame(ct)
 
     global rayOrigin, rayDir
-    rayOrigin = (0, 0);
-    rayDir = npa.normalize((1, 0.1))   # pass
-    rayOrigin = (0, 3.5);rayDir = npa.normalize((1, 0))  # drin, negativ, von rechts
-#    rayOrigin = (2, 2);rayDir = npa.normalize((-1, -.9))  # TODO: zu viele Zellen markiert??
+    rayOrigin = (0, 3.5)
+    rayDir = normalize((1, 0))  # drin, negativ, von rechts
     Window((500,500), myscene, myClick)

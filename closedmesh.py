@@ -24,7 +24,7 @@ class ClosedMesh:
 
     def getSurfaceAndNormal(self, i):
         A, B = self.getSurface(i)
-        return A, B, npa.normalize(getOrthoVec(np.subtract(B, A)))
+        return A, B, normalize(getOrthoVec(np.subtract(B, A)))
 
     def getSurface(self, i):
         # A = vertex(i), B = vertex((i+1)%N)

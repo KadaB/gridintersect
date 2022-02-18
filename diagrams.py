@@ -5,10 +5,14 @@ gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, Gdk
 
 import numpy as np
-import numpyadd as npa
 
 from numpy import linalg as la
+from numpy.linalg import norm
+
 from colorsys import hsv_to_rgb
+
+def normalize(v):
+    return np.divide(v, norm(v))
 
 def lerp(a, b, alpha):
     return (1-alpha) * a + alpha * b
@@ -96,8 +100,8 @@ def lineSection(ct, start, end):
 def arrow_head(ct, pos, dir_vec, size=1):#, setback, angle = np.pi/4, dir_vec):
     linewidth = ct.get_line_width()
     dir_vec_ortho = (-dir_vec[1], dir_vec[0])
-    a = npa.normalize(dir_vec)
-    b = npa.normalize(dir_vec_ortho)
+    a = normalize(dir_vec)
+    b = normalize(dir_vec_ortho)
     
     ct.save()
     ct.transform(cairo.Matrix(*a, *b, *pos)) # orient arrow head
@@ -180,7 +184,7 @@ class Window(Gtk.Window):
             M = np.array([ [res[0], 0, center[0]], 
                             [0, res[1], center[1]],
                             [0, 0, 1] ])
-            p = npa.inv(M).dot((e.x, e.y, 1))
+            p = la.inv(M).dot((e.x, e.y, 1))
             self.clickFunction(p[0], p[1], e.button)
             w.queue_draw()
 
