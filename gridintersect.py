@@ -6,6 +6,23 @@ import sys
 
 FLOATMAX = sys.float_info.max
 
+# z-ordering for cairo
+class DrawQueue:
+    def __init__(self):
+        self.drawCalls = [] 
+    def addCall(self, z_order, call):
+        if call == None:
+            raise ValueError('call is null')
+        self.drawCalls.append( (z_order, call) )
+    def draw(self):
+        for z, call in sorted(self.drawCalls, key=lambda x:x[0]):
+            print(z)
+            call()
+    def reset(self):
+        self.drawCalls = []
+    
+drawQueue = DrawQueue()
+
 class Grid:
     def __init__(self, ct, gridres = (5, 5), gridpos = (1, 1), gridsize=(5, 5)):
         self.ct = ct
@@ -138,27 +155,28 @@ class Grid:
                     iy += iy_step
                     ty_next += dty
 
-        cellStyles = []
-        overall_hits = []
+        # go through all geometries in cell and intersect
+
+        cellStyles = [] # (x, y, syle), cashe cell coordinates and draw style /traverse information
+        overall_hits = [] # cashe all hits to get the closest hit, normally you could break at the first one because of spacial coherance, but we keep on traversing for drawing
         for index_x, index_y, my_tx_next, my_ty_next in gridTravesial(ix, iy, tx_next, ty_next):
             geometries = self.cells[index_x][index_y]
 
             mailbox_skip = 0
-            if len(geometries) > 0: # any geometry contained in cell?
+            if len(geometries) > 0: 
                 hitsInCell = []
                 for geometry in geometries:
-                    if not hasattr(geometry, 'isMailboxed'): # is geometry mail boxed, skip intersection test
+                    if not hasattr(geometry, 'isMailboxed'): # only non mailboxed geometries
                         hit_info = geometry.intersect(self.ct, o, d)
                         if type(hit_info) == tuple: # we have valid hit?
                             hit_t, _ = hit_info
                             if hit_t < my_tx_next and hit_t < my_ty_next: # only count hits located in cur cell
                                 hitsInCell.append(hit_t)
-                                geometry.isMailboxed = True
+                                geometry.isMailboxed = True # mailbox future intersections, normally not needed, because you could break
                             else:
                                 pass
                         else:
-                            # missed geometry, no need to reintersect in future
-                            geometry.isMailboxed = True
+                            geometry.isMailboxed = True      # missed geometry, no need to reintersect in future
                     else:
                         mailbox_skip += 1 # skipped because of mailbox
 
@@ -176,32 +194,40 @@ class Grid:
                 # cell is empty
                 cellStyles.append( (index_x, index_y, 'traversed') )
 
-        for x_index, y_index, style in cellStyles:
-            if style == 'hit':
-                self.markCell(x_index, y_index,(Hue.GREEN, 0.3, .9) )
-            elif style == 'traversed':
-                self.markCell(x_index, y_index, (Hue.AZURE, 0.1, 1))
-            elif style == 'tested':
-                self.markCell(x_index, y_index, (Hue.AZURE, 0.3, 1))
-            elif style == 'mailskip':
-                self.markCell(x_index, y_index, (Hue.RED, 0.3, 1))
+        def markCells():
+            for x_index, y_index, style in cellStyles:
+                if style == 'hit':
+                    self.markCell(x_index, y_index,(Hue.GREEN, 0.3, .9) )
+                elif style == 'traversed':
+                    self.markCell(x_index, y_index, (Hue.AZURE, 0.1, 1))
+                elif style == 'tested':
+                    self.markCell(x_index, y_index, (Hue.AZURE, 0.3, 1))
+                elif style == 'mailskip':
+                    self.markCell(x_index, y_index, (Hue.RED, 0.3, 1))
+        
+        drawQueue.addCall(2, markCells)
 
         if len(overall_hits):
-            self.ct.save()
-            self.ct.set_source_rgb(0, 0, 0)
-            hitpoint = np.add(o, np.multiply(min(overall_hits), d))
-            point(self.ct, hitpoint)
-            self.ct.restore()
+            def drawRayObjectIntersection():
+                self.ct.save()
+                self.ct.set_source_rgb(0, 0, 0)
+                hitpoint = np.add(o, np.multiply(min(overall_hits), d))
+                point(self.ct, hitpoint)
+                self.ct.restore()
+
+            drawQueue.addCall(5, drawRayObjectIntersection)
 
         # intersections with grid cells
-        for _, _, my_tx_next, my_ty_next in gridTravesial(ix, iy, tx_next, ty_next):
-            ct = self.ct
-            ct.save()
-            ct.set_source_rgb(0, 0, 1)
-            point(self.ct, np.add(o, np.multiply(my_tx_next, d)))
-            ct.set_source_rgb(1, 0, 0)
-            point(self.ct, np.add(o, np.multiply(my_ty_next, d)))
-            ct.restore()
+        def drawGridIntersections():
+            for _, _, my_tx_next, my_ty_next in gridTravesial(ix, iy, tx_next, ty_next):
+                ct = self.ct
+                ct.save()
+                ct.set_source_rgb(0, 0, 1)
+                point(self.ct, np.add(o, np.multiply(my_tx_next, d)))
+                ct.set_source_rgb(1, 0, 0)
+                point(self.ct, np.add(o, np.multiply(my_ty_next, d)))
+                ct.restore()
+        drawQueue.addCall(2, drawGridIntersections)
 
     def drawFilledCells(self):
         for x_index in range(self.gridres[0]):
@@ -268,6 +294,7 @@ if __name__=='__main__':
                 rayDir = normalize(np.subtract((x, y), rayOrigin))
 
     def myscene(ct):
+        drawQueue.reset()
         # geometries
         meshes = [
             ClosedMesh(getCircleVertices(1, res = 3)), 
@@ -276,7 +303,7 @@ if __name__=='__main__':
             #
             ClosedMesh([ (p[0] - 2, p[1] - 1) for p in getCircleVertices(1, res = 6)]),
             ClosedMesh([ (p[0] + 3, p[1] - 3) for p in getCircleVertices(1, res = 7)]),
-#   
+            #   
             ClosedMesh([ (p[0] - 7, p[1] - 1) for p in getCircleVertices(1, res = 3)]),
             ClosedMesh([ (p[0] + 2, p[1] - 5) for p in getCircleVertices(1, res = 3)]),
             #
@@ -286,25 +313,32 @@ if __name__=='__main__':
         # Grid
         #grid = Grid(ct, gridres = (6, 6), gridpos = (-6, -6), gridsize=(12, 12))
         grid = Grid.setupGrid(ct, meshes)
-        grid.drawFilledCells()
         grid.traverseGrid(rayOrigin, rayDir)
 
-        for mesh in meshes:
-            mesh.draw(ct, (0,0))
+        # draw grid and coordinate frame
+        drawQueue.addCall(3, lambda : grid.drawGrid())
+        drawQueue.addCall(3, lambda : drawCoordinateFrame(ct))
+
         # vector origin and direction
-        point(ct, rayOrigin)
-        vector(ct, rayOrigin, rayDir)
+        drawQueue.addCall(3, lambda : point(ct, rayOrigin))
+        drawQueue.addCall(3, lambda : vector(ct, rayOrigin, rayDir) )
+
+        drawQueue.addCall(0, lambda : grid.drawFilledCells() )
+        def shit():
+            for mesh in meshes:
+                mesh.draw(ct, (0,0))
+        drawQueue.addCall(4, shit)
 
         # dashed vector line 
-        ct.save()
-        ct.set_line_width(ct.get_line_width() / 2)
-        ct.set_dash([.1])
-        lineSection(ct, np.add(rayOrigin, rayDir), np.add(rayOrigin, np.multiply(rayDir, 20)))
-        ct.restore()
+        def drawDashedLine():
+            ct.save()
+            ct.set_line_width(ct.get_line_width() / 2)
+            ct.set_dash([.1])
+            lineSection(ct, np.add(rayOrigin, rayDir), np.add(rayOrigin, np.multiply(rayDir, 20)))
+            ct.restore()
+        drawQueue.addCall(5, drawDashedLine)
 
-        # draw grid and coordinate frame
-        grid.drawGrid()
-        drawCoordinateFrame(ct)
+        drawQueue.draw()
 
     global rayOrigin, rayDir
     rayOrigin = (0, 3.5)
