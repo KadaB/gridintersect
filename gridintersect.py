@@ -218,16 +218,16 @@ class Grid:
             drawQueue.addCall(5, drawRayObjectIntersection)
 
         # intersections with grid cells
-        def drawGridIntersections():
+        def drawGridCellsIntersections():
             for _, _, my_tx_next, my_ty_next in gridTravesial(ix, iy, tx_next, ty_next):
                 ct = self.ct
                 ct.save()
                 ct.set_source_rgb(0, 0, 1)
-                point(self.ct, np.add(o, np.multiply(my_tx_next, d)))
+                point(self.ct, np.add(o, np.multiply(my_tx_next, d)), 2.3)
                 ct.set_source_rgb(1, 0, 0)
-                point(self.ct, np.add(o, np.multiply(my_ty_next, d)))
+                point(self.ct, np.add(o, np.multiply(my_ty_next, d)), 2.3)
                 ct.restore()
-        drawQueue.addCall(2, drawGridIntersections)
+        drawQueue.addCall(2, drawGridCellsIntersections)
 
     def drawFilledCells(self):
         for x_index in range(self.gridres[0]):

@@ -52,13 +52,13 @@ def minIntersect(intersections):
 def getOrthoVec(v):
     return np.array([-v[1], v[0]])
             
-def point(ct, pos):
+def point(ct, pos, r=3):
     linewidth = ct.get_line_width()
     ct.save()
     ct.translate(*pos)
     ct.scale(linewidth, linewidth)
 
-    ct.arc(0, 0 , 3, 0, 2*np.pi)
+    ct.arc(0, 0 , r, 0, 2*np.pi)
 
     ct.set_line_width(1)
     ct.fill()
