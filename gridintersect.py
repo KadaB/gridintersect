@@ -234,7 +234,6 @@ class Grid:
             for y_index in range(self.gridres[1]):
                 if len(self.cells[x_index][y_index]) > 0:
                     self.markCell(x_index, y_index, (Hue.YELLOW, 0.1, .93))
-        # TODO: Felder herausnehmen, die zu viel markiert wurden und die Geom. nicht enthalten ist.
 
     def markCell(self, ix, iy, hsvcolor=None):
         left, bottom, _, _, xres, yres, w, h = self.getAllDims()
