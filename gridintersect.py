@@ -16,7 +16,6 @@ class DrawQueue:
         self.drawCalls.append( (z_order, call) )
     def draw(self):
         for z, call in sorted(self.drawCalls, key=lambda x:x[0]):
-            print(z)
             call()
     def reset(self):
         self.drawCalls = []
